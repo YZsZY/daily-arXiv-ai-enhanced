@@ -46,6 +46,20 @@ def parse_interests(raw_interest: str) -> List[str]:
     if not raw_interest:
         return []
 
+    raw_interest = raw_interest.strip()
+    if raw_interest in {'""', "''"}:
+        return []
+
+    if (
+        len(raw_interest) >= 2 and
+        raw_interest[0] == raw_interest[-1] and
+        raw_interest[0] in {'"', "'"}
+    ):
+        raw_interest = raw_interest[1:-1].strip()
+
+    if not raw_interest:
+        return []
+
     normalized = raw_interest.replace("\n", ";").replace(",", ";")
     return [part.strip() for part in normalized.split(";") if part.strip()]
 

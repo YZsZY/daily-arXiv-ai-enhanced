@@ -237,10 +237,24 @@ document.addEventListener('DOMContentLoaded', () => {
   
   fetchAvailableDates().then(() => {
     if (availableDates.length > 0) {
+      updateLatestUpdateText(availableDates[0]);
       loadPapersByDate(availableDates[0]);
+    } else {
+      updateLatestUpdateText(null);
     }
   });
 });
+
+function updateLatestUpdateText(date) {
+  const latestUpdateElement = document.getElementById('latestUpdateText');
+  if (!latestUpdateElement) {
+    return;
+  }
+
+  latestUpdateElement.textContent = date
+    ? `Latest update: ${formatDate(date)}`
+    : 'Latest update: N/A';
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
