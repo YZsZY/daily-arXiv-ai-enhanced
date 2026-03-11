@@ -303,10 +303,10 @@ jobs:
 
         if [ -n "$FEISHU_BOT_SECRET" ]; then
           TIMESTAMP=$(date +%s)
-          SIGN=$(printf '%s\n%s' "$TIMESTAMP" "$FEISHU_BOT_SECRET" | openssl dgst -sha256 -hmac "$FEISHU_BOT_SECRET" -binary | openssl base64)
-          PAYLOAD=$(python -c 'import json, os; print(json.dumps({"timestamp": os.environ["TIMESTAMP"], "sign": os.environ["SIGN"].strip(), "msg_type": "text", "content": {"text": os.environ["MESSAGE"]}}, ensure_ascii=False))')
+          SIGN=$(TIMESTAMP="$TIMESTAMP" FEISHU_BOT_SECRET="$FEISHU_BOT_SECRET" python -c 'import base64, hashlib, hmac, os; timestamp = os.environ["TIMESTAMP"]; secret = os.environ["FEISHU_BOT_SECRET"]; string_to_sign = f"{timestamp}\n{secret}".encode("utf-8"); print(base64.b64encode(hmac.new(string_to_sign, digestmod=hashlib.sha256).digest()).decode("utf-8"))')
+          PAYLOAD=$(TIMESTAMP="$TIMESTAMP" SIGN="$SIGN" MESSAGE="$MESSAGE" python -c 'import json, os; print(json.dumps({"timestamp": os.environ["TIMESTAMP"], "sign": os.environ["SIGN"].strip(), "msg_type": "text", "content": {"text": os.environ["MESSAGE"]}}, ensure_ascii=False))')
         else
-          PAYLOAD=$(python -c 'import json, os; print(json.dumps({"msg_type": "text", "content": {"text": os.environ["MESSAGE"]}}, ensure_ascii=False))')
+          PAYLOAD=$(MESSAGE="$MESSAGE" python -c 'import json, os; print(json.dumps({"msg_type": "text", "content": {"text": os.environ["MESSAGE"]}}, ensure_ascii=False))')
         fi
 
         curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
