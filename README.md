@@ -49,7 +49,7 @@ Otherwise, you can directly use this repo in https://dw-dengwei.github.io/daily-
 6. Go to Variables. Variables are shown as plain text and are used for non-sensitive data
 7. Create the following repository variables:
    1. `CATEGORIES`: separate the categories with ",", such as "cs.CL, cs.CV"
-   2. `INTEREST`: optional interest keywords/themes separated by `;`, such as `Video Generation; 3D; Gaussian Splatting; 3D Reconstruction`
+   2. `INTEREST`: optional interest keywords/themes separated by `,`, such as `Video Generation,3D,Gaussian Splatting,3D Reconstruction`
    3. `LANGUAGE`: such as "Chinese" or "English"
    4. `MODEL_NAME`: such as "deepseek-chat"
    5. `EMAIL`: your email for push to GitHub
