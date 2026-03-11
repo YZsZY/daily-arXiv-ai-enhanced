@@ -127,6 +127,34 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="settings-section">
+                        <h2 class="keyword-section-title">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L1 21H23L12 2ZM13 18H11V16H13V18ZM13 14H11V10H13V14Z" fill="currentColor"/>
+                            </svg>
+                            Local AI For Related Papers
+                        </h2>
+                        <div class="settings-card">
+                            <div class="settings-stack">
+                                <div class="settings-field">
+                                    <label for="localAiBaseUrl">Base URL</label>
+                                    <input type="text" id="localAiBaseUrl" class="settings-input" placeholder="https://api.openai.com/v1">
+                                </div>
+                                <div class="settings-field">
+                                    <label for="localAiModel">Model</label>
+                                    <input type="text" id="localAiModel" class="settings-input" placeholder="gpt-4.1-mini / deepseek-chat">
+                                </div>
+                                <div class="settings-field">
+                                    <label for="localAiApiKey">API Key</label>
+                                    <input type="password" id="localAiApiKey" class="settings-input" placeholder="Stored only in this browser">
+                                </div>
+                                <p class="settings-help-text">
+                                    This config is only used in your browser for the "Related Papers" feature. It is saved in localStorage and is never committed to the repo.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="settings-actions">

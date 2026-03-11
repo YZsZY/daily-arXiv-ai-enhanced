@@ -3,9 +3,6 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
-from queue import Queue
-from threading import Lock
-# INSERT_YOUR_CODE
 import requests
 
 import dotenv
@@ -19,6 +16,7 @@ from langchain.prompts import (
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
 )
+from pydantic import BaseModel, Field
 from structure import Structure
 
 if os.path.exists('.env'):
@@ -26,12 +24,102 @@ if os.path.exists('.env'):
 template = open("template.txt", "r").read()
 system = open("system.txt", "r").read()
 
+
+class InterestDecision(BaseModel):
+    keep: bool = Field(description="Whether this paper should be kept for downstream summarization")
+    reason: str = Field(description="Short reason for the decision")
+    matched_interests: List[str] = Field(
+        default_factory=list,
+        description="The interest keywords/themes that match this paper"
+    )
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, required=True, help="jsonline data file")
     parser.add_argument("--max_workers", type=int, default=1, help="Maximum number of parallel workers")
     return parser.parse_args()
+
+
+def parse_interests(raw_interest: str) -> List[str]:
+    """Parse INTEREST env into a clean keyword list."""
+    if not raw_interest:
+        return []
+
+    normalized = raw_interest.replace("\n", ";").replace(",", ";")
+    return [part.strip() for part in normalized.split(";") if part.strip()]
+
+
+def filter_items_by_interest(
+    data: List[Dict],
+    model_name: str,
+    language: str,
+    interests: List[str],
+) -> List[Dict]:
+    """Use the model to keep only papers relevant to the configured interests."""
+    if not interests:
+        print("INTEREST is empty, skipping interest-based filtering", file=sys.stderr)
+        return data
+
+    llm = ChatOpenAI(model=model_name).with_structured_output(
+        InterestDecision,
+        method="function_calling",
+    )
+    interest_prompt = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            (
+                "You are a strict arXiv paper triage assistant. "
+                "Decide whether a paper is relevant to the user's research interests. "
+                "Keep the paper only when it is clearly related to at least one interest, "
+                "including close subtopics, standard synonyms, or direct applications. "
+                "Reject papers that are only loosely related."
+            ),
+        ),
+        (
+            "human",
+            (
+                "Write the decision reason in {language}.\n\n"
+                "User interests:\n{interests}\n\n"
+                "Paper title: {title}\n"
+                "Paper categories: {categories}\n"
+                "Paper abstract:\n{summary}\n\n"
+                "Return whether this paper should be kept."
+            ),
+        ),
+    ])
+    chain = interest_prompt | llm
+
+    filtered_data = []
+    for item in tqdm(data, desc="Filtering by interest"):
+        try:
+            decision: InterestDecision = chain.invoke({
+                "language": language,
+                "interests": "; ".join(interests),
+                "title": item.get("title", ""),
+                "categories": ", ".join(item.get("categories", [])),
+                "summary": item.get("summary", ""),
+            })
+        except Exception as e:
+            print(
+                f"Interest filtering failed for {item.get('id', 'unknown')}: {e}. Keeping the paper.",
+                file=sys.stderr,
+            )
+            filtered_data.append(item)
+            continue
+
+        if decision.keep:
+            item["interest_filter"] = {
+                "matched_interests": decision.matched_interests,
+                "reason": decision.reason,
+            }
+            filtered_data.append(item)
+
+    print(
+        f"Interest-based filtering kept {len(filtered_data)} / {len(data)} papers",
+        file=sys.stderr,
+    )
+    return filtered_data
 
 def process_single_item(chain, item: Dict, language: str) -> Dict:
     def is_sensitive(content: str) -> bool:
@@ -158,9 +246,11 @@ def process_all_items(data: List[Dict], model_name: str, language: str, max_work
     return processed_data
 
 def main():
+    # python enhance.py --data ../data/${today}.jsonl
     args = parse_args()
     model_name = os.environ.get("MODEL_NAME", 'deepseek-chat')
     language = os.environ.get("LANGUAGE", 'Chinese')
+    interests = parse_interests(os.environ.get("INTEREST", ""))
 
     # 检查并删除目标文件
     target_file = args.data.replace('.jsonl', f'_AI_enhanced_{language}.jsonl')
@@ -184,6 +274,17 @@ def main():
 
     data = unique_data
     print('Open:', args.data, file=sys.stderr)
+
+    data = filter_items_by_interest(
+        data=data,
+        model_name=model_name,
+        language=language,
+        interests=interests,
+    )
+    if not data:
+        print("No papers matched INTEREST after model filtering", file=sys.stderr)
+        open(target_file, "w").close()
+        return
     
     # 并行处理所有数据
     processed_data = process_all_items(

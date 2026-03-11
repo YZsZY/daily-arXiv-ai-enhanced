@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Install dependencies
+    - uses: actions/checkout@v4 # 将代码拉取到GitHub Actions runner上 / Checkout code to GitHub Actions runner
+    - name: Install dependencies # 安装依赖 / Install dependencies
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv sync
@@ -42,6 +42,7 @@ jobs:
         export OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }}
         export LANGUAGE="${{ vars.LANGUAGE }}"
         export CATEGORIES="${{ vars.CATEGORIES }}"
+        export INTEREST="${{ vars.INTEREST }}"
         export MODEL_NAME="${{ vars.MODEL_NAME }}"
         
         # 使用Scrapy爬取
@@ -107,6 +108,7 @@ jobs:
         export OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
         export OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }}
         export LANGUAGE="${{ vars.LANGUAGE }}"
+        export INTEREST="${{ vars.INTEREST }}"
         export MODEL_NAME="${{ vars.MODEL_NAME }}"
         
         python enhance.py --data ../data/${today}.jsonl

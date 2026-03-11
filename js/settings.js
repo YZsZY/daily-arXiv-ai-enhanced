@@ -4,12 +4,21 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchGitHubStats();
 });
 
+const LOCAL_AI_STORAGE_KEYS = {
+  apiKey: 'localAiApiKey',
+  baseUrl: 'localAiBaseUrl',
+  model: 'localAiModel'
+};
+const RELATED_REPORT_STORAGE_KEY = 'relatedPaperReportsV1';
+
 // 初始化设置，从localStorage加载已保存的设置
 function initSettings() {
   // 关键词偏好设置
   loadKeywordPreferences();
   // 作者偏好设置
   loadAuthorPreferences();
+  // 浏览器本地 AI 设置
+  loadLocalAiSettings();
 }
 
 // 从localStorage加载关键词偏好
@@ -65,6 +74,22 @@ function loadAuthorPreferences() {
   } else {
     // 显示空标签消息
     showEmptyAuthorMessage();
+  }
+}
+
+function loadLocalAiSettings() {
+  const baseUrlInput = document.getElementById('localAiBaseUrl');
+  const modelInput = document.getElementById('localAiModel');
+  const apiKeyInput = document.getElementById('localAiApiKey');
+
+  if (baseUrlInput) {
+    baseUrlInput.value = localStorage.getItem(LOCAL_AI_STORAGE_KEYS.baseUrl) || '';
+  }
+  if (modelInput) {
+    modelInput.value = localStorage.getItem(LOCAL_AI_STORAGE_KEYS.model) || '';
+  }
+  if (apiKeyInput) {
+    apiKeyInput.value = localStorage.getItem(LOCAL_AI_STORAGE_KEYS.apiKey) || '';
   }
 }
 
@@ -294,6 +319,14 @@ function saveSettings() {
   // 保存设置到localStorage
   localStorage.setItem('preferredKeywords', JSON.stringify(keywords));
   localStorage.setItem('preferredAuthors', JSON.stringify(authors));
+
+  // 保存浏览器本地 AI 配置
+  const localAiBaseUrl = document.getElementById('localAiBaseUrl')?.value.trim() || '';
+  const localAiModel = document.getElementById('localAiModel')?.value.trim() || '';
+  const localAiApiKey = document.getElementById('localAiApiKey')?.value.trim() || '';
+  localStorage.setItem(LOCAL_AI_STORAGE_KEYS.baseUrl, localAiBaseUrl);
+  localStorage.setItem(LOCAL_AI_STORAGE_KEYS.model, localAiModel);
+  localStorage.setItem(LOCAL_AI_STORAGE_KEYS.apiKey, localAiApiKey);
   
   // 显示保存成功提示，添加成功图标
   showNotification('Settings saved successfully!', 'success');
@@ -312,6 +345,18 @@ function resetSettings() {
   // 显示空标签消息
   showEmptyTagMessage();
   showEmptyAuthorMessage();
+
+  // 重置浏览器本地 AI 配置
+  localStorage.removeItem(LOCAL_AI_STORAGE_KEYS.baseUrl);
+  localStorage.removeItem(LOCAL_AI_STORAGE_KEYS.model);
+  localStorage.removeItem(LOCAL_AI_STORAGE_KEYS.apiKey);
+  localStorage.removeItem(RELATED_REPORT_STORAGE_KEY);
+  const baseUrlInput = document.getElementById('localAiBaseUrl');
+  const modelInput = document.getElementById('localAiModel');
+  const apiKeyInput = document.getElementById('localAiApiKey');
+  if (baseUrlInput) baseUrlInput.value = '';
+  if (modelInput) modelInput.value = '';
+  if (apiKeyInput) apiKeyInput.value = '';
   
   // 显示重置成功提示
   showNotification('Settings reset to default!', 'info');

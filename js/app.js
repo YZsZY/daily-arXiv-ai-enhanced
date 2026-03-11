@@ -14,6 +14,23 @@ let currentFilteredPapers = []; // 当前过滤后的论文列表
 let textSearchQuery = ''; // 实时文本搜索查询
 let previousActiveKeywords = null; // 文本搜索激活时，暂存之前的关键词激活集合
 let previousActiveAuthors = null; // 文本搜索激活时，暂存之前的作者激活集合
+const RELATED_REPORT_STORAGE_KEY = 'relatedPaperReportsV1';
+const LOCAL_AI_STORAGE_KEYS = {
+  apiKey: 'localAiApiKey',
+  baseUrl: 'localAiBaseUrl',
+  model: 'localAiModel'
+};
+const DATE_PAPER_CACHE = new Map();
+const RELATED_REPORT_MEMORY_CACHE = new Map();
+const RELATED_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'using', 'use',
+  'towards', 'through', 'their', 'these', 'those', 'over', 'under', 'between',
+  'paper', 'study', 'based', 'via', 'than', 'when', 'where', 'which', 'while',
+  'about', 'your', 'have', 'has', 'been', 'being', 'more', 'less', 'most',
+  'such', 'also', 'they', 'them', 'ours', 'ourselves', 'can', 'could', 'will',
+  'would', 'should', 'into', 'across', 'among', 'after', 'before', 'recent',
+  'method', 'methods', 'result', 'results', 'model', 'models'
+]);
 
 // 加载用户的关键词设置
 function loadUserKeywords() {
@@ -224,6 +241,419 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderMultilineText(value) {
+  if (!value) {
+    return '';
+  }
+
+  return escapeHtml(value)
+    .split(/\n{2,}/)
+    .map(paragraph => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+function normalizeBaseUrl(baseUrl) {
+  return (baseUrl || '').replace(/\/+$/, '');
+}
+
+function getLocalAiConfig() {
+  return {
+    apiKey: localStorage.getItem(LOCAL_AI_STORAGE_KEYS.apiKey) || '',
+    baseUrl: normalizeBaseUrl(localStorage.getItem(LOCAL_AI_STORAGE_KEYS.baseUrl) || ''),
+    model: localStorage.getItem(LOCAL_AI_STORAGE_KEYS.model) || ''
+  };
+}
+
+function hasUsableLocalAiConfig() {
+  const config = getLocalAiConfig();
+  return Boolean(config.apiKey && config.baseUrl && config.model);
+}
+
+function getRelatedReportStorage() {
+  if (RELATED_REPORT_MEMORY_CACHE.size > 0) {
+    return RELATED_REPORT_MEMORY_CACHE;
+  }
+
+  try {
+    const raw = localStorage.getItem(RELATED_REPORT_STORAGE_KEY);
+    if (!raw) {
+      return RELATED_REPORT_MEMORY_CACHE;
+    }
+
+    const parsed = JSON.parse(raw);
+    Object.entries(parsed).forEach(([key, value]) => {
+      RELATED_REPORT_MEMORY_CACHE.set(key, value);
+    });
+  } catch (error) {
+    console.error('Failed to load related paper cache:', error);
+  }
+
+  return RELATED_REPORT_MEMORY_CACHE;
+}
+
+function persistRelatedReportStorage() {
+  try {
+    const serialized = Object.fromEntries(getRelatedReportStorage().entries());
+    localStorage.setItem(RELATED_REPORT_STORAGE_KEY, JSON.stringify(serialized));
+  } catch (error) {
+    console.error('Failed to save related paper cache:', error);
+  }
+}
+
+function buildRelatedReportKey(paper) {
+  return `${paper.id}:${getPreferredLanguage()}`;
+}
+
+function getCachedRelatedReport(paper) {
+  return getRelatedReportStorage().get(buildRelatedReportKey(paper)) || null;
+}
+
+function saveCachedRelatedReport(paper, report) {
+  getRelatedReportStorage().set(buildRelatedReportKey(paper), report);
+  persistRelatedReportStorage();
+}
+
+function tokenizeText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter(token => token.length > 1 && !RELATED_STOPWORDS.has(token));
+}
+
+function toFrequencyMap(tokens) {
+  const freq = new Map();
+  tokens.forEach(token => {
+    freq.set(token, (freq.get(token) || 0) + 1);
+  });
+  return freq;
+}
+
+function computeWeightedOverlap(baseMap, candidateMap) {
+  let overlap = 0;
+  let total = 0;
+
+  baseMap.forEach((count, token) => {
+    total += count;
+    if (candidateMap.has(token)) {
+      overlap += Math.min(count, candidateMap.get(token));
+    }
+  });
+
+  return total > 0 ? overlap / total : 0;
+}
+
+function computeRelatedScore(sourcePaper, candidatePaper) {
+  const sourceTitleTokens = tokenizeText(sourcePaper.title);
+  const candidateTitleTokens = tokenizeText(candidatePaper.title);
+  const sourceSummaryTokens = tokenizeText(sourcePaper.details || sourcePaper.summary);
+  const candidateSummaryTokens = tokenizeText(candidatePaper.details || candidatePaper.summary);
+  const sourceCategoryTokens = (sourcePaper.allCategories || sourcePaper.category || [])
+    .join(' ')
+    .toLowerCase()
+    .split(/[^a-z0-9.]+/)
+    .filter(Boolean);
+  const candidateCategoryTokens = (candidatePaper.allCategories || candidatePaper.category || [])
+    .join(' ')
+    .toLowerCase()
+    .split(/[^a-z0-9.]+/)
+    .filter(Boolean);
+
+  const titleScore = computeWeightedOverlap(
+    toFrequencyMap(sourceTitleTokens),
+    toFrequencyMap(candidateTitleTokens)
+  );
+  const summaryScore = computeWeightedOverlap(
+    toFrequencyMap(sourceSummaryTokens),
+    toFrequencyMap(candidateSummaryTokens)
+  );
+  const categoryScore = computeWeightedOverlap(
+    toFrequencyMap(sourceCategoryTokens),
+    toFrequencyMap(candidateCategoryTokens)
+  );
+
+  const score = titleScore * 0.55 + summaryScore * 0.3 + categoryScore * 0.15;
+  return Number(score.toFixed(4));
+}
+
+function flattenPaperDataMap(data) {
+  const flat = [];
+  Object.values(data).forEach(items => {
+    if (Array.isArray(items)) {
+      flat.push(...items);
+    }
+  });
+  return flat;
+}
+
+async function loadPaperFileByDate(date) {
+  const selectedLanguage = selectLanguageForDate(date);
+  const cacheKey = `${date}:${selectedLanguage}`;
+  if (DATE_PAPER_CACHE.has(cacheKey)) {
+    return DATE_PAPER_CACHE.get(cacheKey);
+  }
+
+  try {
+    const response = await fetch(`data/${date}_AI_enhanced_${selectedLanguage}.jsonl`);
+    if (!response.ok) {
+      DATE_PAPER_CACHE.set(cacheKey, []);
+      return [];
+    }
+
+    const text = await response.text();
+    if (!text || !text.trim()) {
+      DATE_PAPER_CACHE.set(cacheKey, []);
+      return [];
+    }
+
+    const parsed = flattenPaperDataMap(parseJsonlData(text, date));
+    DATE_PAPER_CACHE.set(cacheKey, parsed);
+    return parsed;
+  } catch (error) {
+    console.error(`Failed to load paper file for ${date}:`, error);
+    DATE_PAPER_CACHE.set(cacheKey, []);
+    return [];
+  }
+}
+
+async function findRecentLocalRelatedPapers(sourcePaper, monthWindow = 6, limit = 5) {
+  const sourceDate = new Date(sourcePaper.date);
+  const startDate = new Date(sourceDate);
+  startDate.setMonth(startDate.getMonth() - monthWindow);
+  const startDateString = startDate.toISOString().slice(0, 10);
+
+  const candidateDates = availableDates.filter(date => date >= startDateString && date <= sourcePaper.date);
+  const allCandidates = [];
+  for (const date of candidateDates) {
+    const papers = await loadPaperFileByDate(date);
+    papers.forEach(paper => {
+      if (paper.id !== sourcePaper.id) {
+        allCandidates.push(paper);
+      }
+    });
+  }
+
+  const dedupedCandidates = new Map();
+  allCandidates.forEach(candidate => {
+    if (!dedupedCandidates.has(candidate.id)) {
+      dedupedCandidates.set(candidate.id, candidate);
+    }
+  });
+
+  return Array.from(dedupedCandidates.values())
+    .map(candidate => ({
+      ...candidate,
+      relatedScore: computeRelatedScore(sourcePaper, candidate)
+    }))
+    .filter(candidate => candidate.relatedScore >= 0.08)
+    .sort((a, b) => b.relatedScore - a.relatedScore)
+    .slice(0, limit);
+}
+
+function buildFallbackRelatedOverview(sourcePaper, relatedPapers) {
+  if (!relatedPapers.length) {
+    return 'No sufficiently related papers were found in the local archive for the previous 6 months.';
+  }
+
+  const categoryCounts = new Map();
+  relatedPapers.forEach(paper => {
+    (paper.allCategories || []).forEach(category => {
+      categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    });
+  });
+
+  const topCategories = Array.from(categoryCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([category]) => category);
+
+  return [
+    `Found ${relatedPapers.length} related papers for "${sourcePaper.title}" in the local archive over the last 6 months.`,
+    topCategories.length > 0 ? `Frequent categories: ${topCategories.join(', ')}.` : '',
+    'Configure Local AI in Settings if you want a synthesized related-work overview generated in the browser.'
+  ].filter(Boolean).join('\n\n');
+}
+
+async function synthesizeRelatedOverview(sourcePaper, relatedPapers) {
+  const config = getLocalAiConfig();
+  if (!config.apiKey || !config.baseUrl || !config.model || relatedPapers.length === 0) {
+    return null;
+  }
+
+  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`
+    },
+    body: JSON.stringify({
+      model: config.model,
+      temperature: 0.2,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a research assistant. Summarize how the related papers connect to the source paper. Keep the response concise and structured.'
+        },
+        {
+          role: 'user',
+          content: [
+            `Write in ${getPreferredLanguage() === 'Chinese' ? 'Chinese' : 'English'}.`,
+            `Source paper title: ${sourcePaper.title}`,
+            `Source paper summary: ${sourcePaper.details || sourcePaper.summary}`,
+            'Related papers:',
+            relatedPapers.map((paper, index) => (
+              `${index + 1}. ${paper.title}\nAuthors: ${paper.authors}\nDate: ${paper.date}\nCategories: ${(paper.allCategories || []).join(', ')}\nTL;DR: ${paper.summary}\nAbstract: ${paper.details || ''}`
+            )).join('\n\n'),
+            'Please provide: 1) overall connection, 2) common themes, 3) major differences, 4) suggested reading order.'
+          ].join('\n\n')
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local AI request failed with HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content?.trim() || '';
+}
+
+function renderRelatedPapersReport(report) {
+  const container = document.getElementById('relatedPapersContainer');
+  if (!container) {
+    return;
+  }
+
+  if (!report.relatedPapers || report.relatedPapers.length === 0) {
+    container.innerHTML = `
+      <div class="related-papers-empty">
+        <p>${escapeHtml(report.overview || 'No related papers were found.')}</p>
+      </div>
+    `;
+    return;
+  }
+
+  const overviewBlock = report.overview
+    ? `
+      <div class="related-overview">
+        <div class="related-overview-head">
+          <h4>${report.aiGenerated ? 'AI Overview' : 'Overview'}</h4>
+          <span class="related-cache-badge">${report.aiGenerated ? 'AI cached' : 'Local cached'}</span>
+        </div>
+        <div class="related-overview-content">${renderMultilineText(report.overview)}</div>
+      </div>
+    `
+    : '';
+
+  const cards = report.relatedPapers.map((paper, index) => `
+    <button class="related-paper-card" data-related-paper-id="${escapeHtml(paper.id)}" type="button">
+      <div class="related-paper-meta">
+        <span class="related-paper-rank">#${index + 1}</span>
+        <span class="related-paper-score">score ${Number(paper.relatedScore || 0).toFixed(2)}</span>
+      </div>
+      <h5>${escapeHtml(paper.title)}</h5>
+      <p>${escapeHtml(paper.authors)}</p>
+      <div class="related-paper-tags">
+        <span>${escapeHtml(formatDate(paper.date))}</span>
+        <span>${escapeHtml((paper.allCategories || []).slice(0, 2).join(', ') || 'N/A')}</span>
+      </div>
+    </button>
+  `).join('');
+
+  container.innerHTML = `
+    ${overviewBlock}
+    <div class="related-paper-grid">${cards}</div>
+  `;
+
+  report.relatedPapers.forEach(paper => {
+    const button = Array.from(container.querySelectorAll('[data-related-paper-id]'))
+      .find(node => node.dataset.relatedPaperId === paper.id);
+    if (button) {
+      button.addEventListener('click', () => {
+        showPaperDetails(paper, null);
+      });
+    }
+  });
+}
+
+async function loadRelatedPapersForCurrentPaper(sourcePaper) {
+  const button = document.getElementById('loadRelatedPapersButton');
+  const container = document.getElementById('relatedPapersContainer');
+  if (!button || !container) {
+    return;
+  }
+
+  const cachedReport = getCachedRelatedReport(sourcePaper);
+  if (cachedReport && (cachedReport.aiGenerated || !hasUsableLocalAiConfig())) {
+    renderRelatedPapersReport(cachedReport);
+    button.textContent = cachedReport.aiGenerated || !hasUsableLocalAiConfig() ? 'Refresh' : 'Generate AI Overview';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = cachedReport ? 'Generating...' : 'Searching...';
+  container.innerHTML = `
+    <div class="related-papers-loading">
+      <div class="loading-spinner"></div>
+      <p>${cachedReport ? 'Generating an AI overview from the cached related-paper list...' : 'Searching the last 6 months of local papers and preparing a cached report...'}</p>
+    </div>
+  `;
+
+  try {
+    const relatedPapers = cachedReport?.relatedPapers || await findRecentLocalRelatedPapers(sourcePaper);
+    let overview = cachedReport?.overview || buildFallbackRelatedOverview(sourcePaper, relatedPapers);
+    let aiGenerated = cachedReport?.aiGenerated || false;
+
+    if (relatedPapers.length > 0 && hasUsableLocalAiConfig()) {
+      try {
+        const synthesized = await synthesizeRelatedOverview(sourcePaper, relatedPapers);
+        if (synthesized) {
+          overview = synthesized;
+          aiGenerated = true;
+        }
+      } catch (error) {
+        console.error('Failed to synthesize related overview:', error);
+      }
+    }
+
+    const report = {
+      generatedAt: new Date().toISOString(),
+      aiGenerated,
+      overview,
+      relatedPapers
+    };
+    saveCachedRelatedReport(sourcePaper, report);
+    renderRelatedPapersReport(report);
+  } catch (error) {
+    console.error('Failed to load related papers:', error);
+    container.innerHTML = `
+      <div class="related-papers-empty">
+        <p>Failed to build related papers: ${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  } finally {
+    button.disabled = false;
+    const latestReport = getCachedRelatedReport(sourcePaper);
+    if (latestReport && !latestReport.aiGenerated && hasUsableLocalAiConfig()) {
+      button.textContent = 'Generate AI Overview';
+    } else if (latestReport) {
+      button.textContent = 'Refresh';
+    } else {
+      button.textContent = 'Find Related';
+    }
+  }
+}
 
 async function fetchGitHubStats() {
   try {
@@ -733,6 +1163,7 @@ function parseJsonlData(jsonlText, date) {
         url: paper.abs || paper.pdf || `https://arxiv.org/abs/${paper.id}`,
         authors: Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors,
         category: allCategories,
+        allCategories: allCategories,
         summary: summary,
         details: paper.summary || '',
         date: date,
@@ -740,7 +1171,8 @@ function parseJsonlData(jsonlText, date) {
         motivation: paper.AI && paper.AI.motivation ? paper.AI.motivation : '',
         method: paper.AI && paper.AI.method ? paper.AI.method : '',
         result: paper.AI && paper.AI.result ? paper.AI.result : '',
-        conclusion: paper.AI && paper.AI.conclusion ? paper.AI.conclusion : ''
+        conclusion: paper.AI && paper.AI.conclusion ? paper.AI.conclusion : '',
+        interestFilter: paper.interest_filter || null
       });
     } catch (error) {
       console.error('解析JSON行失败:', error, line);
@@ -1222,6 +1654,7 @@ function showPaperDetails(paper, paperIndex) {
   
   // 添加匹配标记
   const matchedPaperClass = paper.isMatched ? 'matched-paper-details' : '';
+  const relatedReport = getCachedRelatedReport(paper);
   
   const modalContent = `
     <div class="paper-details ${matchedPaperClass}">
@@ -1241,6 +1674,23 @@ function showPaperDetails(paper, paperIndex) {
       </div>
       
       ${highlightedAbstract ? `<h3>Abstract</h3><p class="original-abstract">${highlightedAbstract}</p>` : ''}
+
+      <div class="related-papers-section">
+        <div class="related-papers-header">
+          <div>
+            <h3>Related Papers (Last 6 Months)</h3>
+            <p class="related-papers-description">Search the local archive, cache the result in this browser, and optionally synthesize a related-work note with your local AI config.</p>
+          </div>
+          <button id="loadRelatedPapersButton" class="button related-papers-button" type="button">
+            ${relatedReport ? (relatedReport.aiGenerated || !hasUsableLocalAiConfig() ? 'Open Cached' : 'Generate AI Overview') : 'Find Related'}
+          </button>
+        </div>
+        <div id="relatedPapersContainer" class="related-papers-container">
+          ${relatedReport
+            ? '<p class="related-papers-placeholder">Cached related report found. Click the button to open it.</p>'
+            : '<p class="related-papers-placeholder">No cached report yet. Click "Find Related" to search the local 6-month archive.</p>'}
+        </div>
+      </div>
       
       <div class="pdf-preview-section">
         <div class="pdf-header">
@@ -1272,8 +1722,15 @@ function showPaperDetails(paper, paperIndex) {
   
   // 更新论文位置信息
   const paperPosition = document.getElementById('paperPosition');
-  if (paperPosition && currentFilteredPapers.length > 0) {
+  if (paperPosition && paperIndex && currentFilteredPapers.length > 0) {
     paperPosition.textContent = `${currentPaperIndex + 1} / ${currentFilteredPapers.length}`;
+  } else if (paperPosition) {
+    paperPosition.textContent = 'Related paper';
+  }
+
+  const relatedButton = document.getElementById('loadRelatedPapersButton');
+  if (relatedButton) {
+    relatedButton.addEventListener('click', () => loadRelatedPapersForCurrentPaper(paper));
   }
   
   modal.classList.add('active');
