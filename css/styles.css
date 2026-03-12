@@ -221,6 +221,36 @@ header {
   color: var(--text-secondary);
 }
 
+.site-interest-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.site-interest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.interest-tag {
+  cursor: default;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.interest-tag:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.interest-tag-loading {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .header-content h1 {
   font-size: 20px;
   font-weight: 600;
