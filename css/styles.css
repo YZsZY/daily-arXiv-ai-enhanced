@@ -223,7 +223,7 @@ header {
 
 .site-interest-text {
   display: block;
-  max-width: 360px;
+  max-width: 50%;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
