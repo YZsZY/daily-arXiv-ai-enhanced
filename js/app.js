@@ -975,7 +975,7 @@ function selectLanguageForDate(date, preferredLanguage = null) {
 
 async function fetchAvailableDates() {
   try {
-    const response = await fetch('assets/file-list.txt');
+    const response = await fetch(`assets/file-list.txt?v=${Date.now()}`);
     if (!response.ok) {
       console.error('Error fetching file list:', response.status);
       return [];

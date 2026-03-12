@@ -5,7 +5,7 @@ name: arXiv-daily-ai-enhanced
 
 on:
   schedule:
-    - cron: "30 1 * * *"
+    - cron: "45 0 * * *"
   workflow_dispatch:
 
 
@@ -257,49 +257,20 @@ jobs:
       env:
         FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
         FEISHU_BOT_SECRET: ${{ secrets.FEISHU_BOT_SECRET }}
-        JOB_STATUS: ${{ job.status }}
-        HAS_NEW_CONTENT: ${{ steps.dedup_check.outputs.has_new_content }}
-        SKIP_REASON: ${{ steps.dedup_check.outputs.skip_reason }}
         CRAWL_DATE: ${{ steps.crawl_step.outputs.crawl_date }}
-        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        REPOSITORY: ${{ github.repository }}
-        ACTOR: ${{ github.actor }}
+        INTEREST_KEYWORDS: ${{ vars.INTEREST }}
+        SITE_URL: https://yzszy.github.io/daily-arXiv-ai-enhanced/
       run: |
         if [ -z "$FEISHU_WEBHOOK_URL" ]; then
           echo "ℹ️ FEISHU_WEBHOOK_URL is not set, skip Feishu notification"
           exit 0
         fi
 
-        if [ "$JOB_STATUS" = "success" ] && [ "$HAS_NEW_CONTENT" = "true" ]; then
-          STATUS_TEXT="成功并已更新"
-          STATUS_EMOJI="✅"
-          DETAIL_TEXT="发现新内容，已完成处理并推送到仓库。"
-        elif [ "$JOB_STATUS" = "success" ]; then
-          STATUS_TEXT="成功但无新内容"
-          STATUS_EMOJI="ℹ️"
-          case "$SKIP_REASON" in
-            no_new_content)
-              DETAIL_TEXT="工作流运行成功，但去重后没有新内容。"
-              ;;
-            *)
-              DETAIL_TEXT="工作流运行成功，但未执行内容更新。"
-              ;;
-          esac
-        else
-          STATUS_TEXT="运行失败"
-          STATUS_EMOJI="❌"
-          if [ -n "$SKIP_REASON" ]; then
-            DETAIL_TEXT="工作流失败，skip_reason=${SKIP_REASON}。"
-          else
-            DETAIL_TEXT="工作流失败，请查看 Actions 日志。"
-          fi
-        fi
-
         if [ -z "$CRAWL_DATE" ]; then
           CRAWL_DATE=$(date -u "+%Y-%m-%d")
         fi
 
-        MESSAGE="${STATUS_EMOJI} daily-arXiv-ai-enhanced 通知\n状态: ${STATUS_TEXT}\n日期: ${CRAWL_DATE}\n仓库: ${REPOSITORY}\n触发者: ${ACTOR}\n说明: ${DETAIL_TEXT}\n运行链接: ${RUN_URL}"
+        MESSAGE="ArXiv has updated: 日期: ${CRAWL_DATE} 关键词: ${INTEREST_KEYWORDS} 链接: ${SITE_URL}"
 
         if [ -n "$FEISHU_BOT_SECRET" ]; then
           TIMESTAMP=$(date +%s)
