@@ -160,6 +160,13 @@ jobs:
         ls data/*.jsonl | sed 's|data/||' > assets/file-list.txt
         echo "文件列表更新完成 / File list updated"
 
+    - name: Update today interest
+      if: steps.dedup_check.outputs.has_new_content == 'true'
+      run: |
+        echo "更新今日 INTEREST... / Updating today's INTEREST..."
+        printf '%s\n' "${{ vars.INTEREST }}" > assets/today-interest.txt
+        echo "今日 INTEREST 更新完成 / Today's INTEREST updated"
+
     - name: Generate password hash and inject into config
       if: steps.dedup_check.outputs.has_new_content == 'true'
       run: |

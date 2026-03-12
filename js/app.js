@@ -228,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   
   fetchGitHubStats();
+  fetchTodayInterest();
   
   // 加载用户关键词
   loadUserKeywords();
@@ -254,6 +255,29 @@ function updateLatestUpdateText(date) {
   latestUpdateElement.textContent = date
     ? `Latest update: ${formatDate(date)}`
     : 'Latest update: N/A';
+}
+
+async function fetchTodayInterest() {
+  const interestElement = document.getElementById('todayInterestText');
+  if (!interestElement) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`assets/today-interest.txt?v=${Date.now()}`);
+    if (!response.ok) {
+      interestElement.textContent = 'Today interest: N/A';
+      return;
+    }
+
+    const interest = (await response.text()).trim();
+    interestElement.textContent = interest
+      ? `Today interest: ${interest}`
+      : 'Today interest: N/A';
+  } catch (error) {
+    console.error('获取今日 INTEREST 失败:', error);
+    interestElement.textContent = 'Today interest: N/A';
+  }
 }
 
 function escapeHtml(value) {
