@@ -266,17 +266,17 @@ async function fetchTodayInterest() {
   try {
     const response = await fetch(`assets/today-interest.txt?v=${Date.now()}`);
     if (!response.ok) {
-      interestElement.textContent = 'Today interest: N/A';
+      interestElement.textContent = 'N/A';
       return;
     }
 
     const interest = (await response.text()).trim();
     interestElement.textContent = interest
-      ? `Today interest: ${interest}`
-      : 'Today interest: N/A';
+      ? interest
+      : 'N/A';
   } catch (error) {
     console.error('获取今日 INTEREST 失败:', error);
-    interestElement.textContent = 'Today interest: N/A';
+    interestElement.textContent = 'N/A';
   }
 }
 

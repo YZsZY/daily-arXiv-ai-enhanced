@@ -456,6 +456,25 @@ header {
   position: relative;
 }
 
+.interest-label-container {
+  display: flex;
+  align-items: flex-start;
+  max-width: 1440px;
+  width: 100%;
+  padding: 0 24px 6px 24px;
+  margin: 0 auto;
+  gap: 12px;
+}
+
+.interest-label-container .category-nav-label {
+  flex-shrink: 0;
+}
+
+.interest-label-container .site-interest-text {
+  max-width: none;
+  flex: 1;
+}
+
 .category-button {
   display: inline-flex;
   align-items: center;
