@@ -475,6 +475,23 @@ header {
   flex: 1;
 }
 
+.interest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.interest-chip {
+  cursor: default;
+}
+
+.interest-chip:hover {
+  background-color: var(--background-hover);
+  color: var(--text-secondary);
+  transform: none;
+}
+
 .category-button {
   display: inline-flex;
   align-items: center;

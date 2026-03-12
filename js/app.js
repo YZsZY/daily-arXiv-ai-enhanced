@@ -263,20 +263,33 @@ async function fetchTodayInterest() {
     return;
   }
 
+  const renderInterestTags = (items) => {
+    if (!items.length) {
+      interestElement.innerHTML = '<span class="site-subtitle">N/A</span>';
+      return;
+    }
+
+    interestElement.innerHTML = items
+      .map(item => `<span class="category-button interest-chip">${escapeHtml(item)}</span>`)
+      .join('');
+  };
+
   try {
     const response = await fetch(`assets/today-interest.txt?v=${Date.now()}`);
     if (!response.ok) {
-      interestElement.textContent = 'N/A';
+      renderInterestTags([]);
       return;
     }
 
     const interest = (await response.text()).trim();
-    interestElement.textContent = interest
-      ? interest
-      : 'N/A';
+    const items = interest
+      ? interest.split(',').map(item => item.trim()).filter(Boolean)
+      : [];
+
+    renderInterestTags(items);
   } catch (error) {
     console.error('获取今日 INTEREST 失败:', error);
-    interestElement.textContent = 'N/A';
+    renderInterestTags([]);
   }
 }
 
