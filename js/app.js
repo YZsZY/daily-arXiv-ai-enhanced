@@ -263,42 +263,20 @@ async function fetchTodayInterest() {
     return;
   }
 
-  const renderInterestFallback = (text) => {
-    interestElement.innerHTML = `
-      <span class="site-subtitle">Today interest:</span>
-      <div class="site-interest-tags">
-        <span class="interest-tag-loading">${escapeHtml(text)}</span>
-      </div>
-    `;
-  };
-
   try {
     const response = await fetch(`assets/today-interest.txt?v=${Date.now()}`);
     if (!response.ok) {
-      renderInterestFallback('N/A');
+      interestElement.textContent = 'Today interest: N/A';
       return;
     }
 
     const interest = (await response.text()).trim();
-    if (!interest) {
-      renderInterestFallback('N/A');
-      return;
-    }
-
-    const tagsHtml = interest
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(Boolean)
-      .map(tag => `<span class="category-button interest-tag">${escapeHtml(tag)}</span>`)
-      .join('');
-
-    interestElement.innerHTML = `
-      <span class="site-subtitle">Today interest:</span>
-      <div class="site-interest-tags">${tagsHtml || '<span class="interest-tag-loading">N/A</span>'}</div>
-    `;
+    interestElement.textContent = interest
+      ? `Today interest: ${interest}`
+      : 'Today interest: N/A';
   } catch (error) {
     console.error('获取今日 INTEREST 失败:', error);
-    renderInterestFallback('N/A');
+    interestElement.textContent = 'Today interest: N/A';
   }
 }
 
