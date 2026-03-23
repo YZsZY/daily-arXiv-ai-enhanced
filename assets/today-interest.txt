@@ -1,5 +1,10 @@
 Video
-Generation,3D,Gaussian
+Generation,3D
+Generation,Gaussian
 Splatting,3D
 Reconstruction,World
-Model,Geometric
+Model,Geometric,Interactive
+Video
+Generation,4D
+Dynamic
+Reconstruction
