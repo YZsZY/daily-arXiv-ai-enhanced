@@ -7,4 +7,6 @@ Model,Geometric,Interactive
 Video
 Generation,4D
 Dynamic
-Reconstruction
+Reconstruction,Physical
+Animation,Fluid
+Simulation,MPM,Graphics
