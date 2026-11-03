@@ -14,6 +14,10 @@ let currentFilteredPapers = []; // 当前过滤后的论文列表
 let textSearchQuery = ''; // 实时文本搜索查询
 let previousActiveKeywords = null; // 文本搜索激活时，暂存之前的关键词激活集合
 let previousActiveAuthors = null; // 文本搜索激活时，暂存之前的作者激活集合
+let favoritesMode = false; // 是否处于收藏列表视图
+let favoriteStore = null; // 收藏数据的内存缓存，键为论文 id
+let currentModalPaper = null; // 详情弹窗中正在查看的论文
+const FAVORITES_STORAGE_KEY = 'favoritePapersV1';
 const RELATED_REPORT_STORAGE_KEY = 'relatedPaperReportsV1';
 const LOCAL_AI_STORAGE_KEYS = {
   apiKey: 'localAiApiKey',
@@ -226,6 +230,7 @@ function toggleAuthorFilter(author) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
+  initFavorites();
   
   fetchGitHubStats();
   fetchTodayInterest();
@@ -1119,6 +1124,7 @@ function toggleRangeMode() {
 }
 
 async function loadPapersByDate(date) {
+  if (favoritesMode) setFavoritesMode(false, { render: false });
   currentDate = date;
   document.getElementById('currentDate').textContent = formatDate(date);
   
@@ -1328,7 +1334,9 @@ function renderPapers() {
   container.className = `paper-container ${currentView === 'list' ? 'list-view' : ''}`;
   
   let papers = [];
-  if (currentCategory === 'all') {
+  if (favoritesMode) {
+    papers = getFavoriteList();
+  } else if (currentCategory === 'all') {
     const { sortedCategories } = getAllCategories(paperData);
     sortedCategories.forEach(category => {
       if (paperData[category]) {
@@ -1564,7 +1572,7 @@ function renderPapers() {
   if (filteredPapers.length === 0) {
     container.innerHTML = `
       <div class="loading-container">
-        <p>No paper found.</p>
+        <p>${favoritesMode ? 'No favorites yet. Click the star on a paper card to save it here.' : 'No paper found.'}</p>
       </div>
     `;
     return;
@@ -1613,6 +1621,10 @@ function renderPapers() {
     paperCard.innerHTML = `
       <div class="paper-card-index">${index + 1}</div>
       ${paper.isMatched ? '<div class="match-badge" title="匹配您的搜索条件"></div>' : ''}
+      <button class="favorite-button ${isFavorite(paper) ? 'active' : ''}" type="button"
+        data-paper-key="${escapeHtml(getPaperKey(paper))}"
+        aria-pressed="${isFavorite(paper)}"
+        title="${isFavorite(paper) ? 'Remove from favorites' : 'Add to favorites'}">${FAVORITE_ICON}</button>
       ${paper.teaser ? `
       <div class="paper-card-teaser">
         <img src="${escapeHtml(paper.teaser)}" alt="" loading="lazy" decoding="async" onerror="this.parentElement.remove()">
@@ -1633,12 +1645,170 @@ function renderPapers() {
       </div>
     `;
     
+    paperCard.querySelector('.favorite-button').addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleFavorite(paper);
+    });
+
     paperCard.addEventListener('click', () => {
       currentPaperIndex = index; // 记录当前点击的论文索引
       showPaperDetails(paper, index + 1);
     });
     
     container.appendChild(paperCard);
+  });
+}
+
+const FAVORITE_ICON = `
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+  </svg>`;
+
+function getPaperKey(paper) {
+  return paper.id || paper.url;
+}
+
+function getFavorites() {
+  if (favoriteStore) return favoriteStore;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '{}');
+    favoriteStore = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    console.error('读取收藏失败:', error);
+    favoriteStore = {};
+  }
+  return favoriteStore;
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(getFavorites()));
+    return true;
+  } catch (error) {
+    console.error('保存收藏失败:', error);
+    alert('Failed to save favorites: browser storage may be full.');
+    return false;
+  }
+}
+
+function isFavorite(paper) {
+  return Boolean(getFavorites()[getPaperKey(paper)]);
+}
+
+function getFavoriteList() {
+  return Object.values(getFavorites())
+    .sort((a, b) => String(b.favoritedAt || '').localeCompare(String(a.favoritedAt || '')));
+}
+
+// 保存完整快照，收藏列表无需重新加载各日期的数据文件即可渲染卡片和详情
+function toggleFavorite(paper) {
+  const favorites = getFavorites();
+  const key = getPaperKey(paper);
+  const previous = favorites[key];
+  if (previous) {
+    delete favorites[key];
+  } else {
+    const { isMatched, matchReason, ...snapshot } = paper;
+    favorites[key] = { ...snapshot, favoritedAt: new Date().toISOString() };
+  }
+  if (!saveFavorites()) {
+    if (previous) favorites[key] = previous; else delete favorites[key];
+  }
+  updateFavoriteButtons(key);
+  updateFavoritesCount();
+}
+
+function updateFavoriteButtons(key) {
+  const active = Boolean(getFavorites()[key]);
+  document.querySelectorAll(`[data-paper-key="${CSS.escape(key)}"]`).forEach(button => {
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+    button.title = active ? 'Remove from favorites' : 'Add to favorites';
+  });
+}
+
+function updateFavoritesCount() {
+  const count = Object.keys(getFavorites()).length;
+  const headerCount = document.getElementById('favoritesHeaderCount');
+  if (headerCount) headerCount.textContent = count > 0 ? String(count) : '';
+  const total = document.getElementById('favoritesTotal');
+  if (total) total.textContent = String(count);
+}
+
+function setFavoritesMode(enabled, { render = true } = {}) {
+  favoritesMode = enabled;
+  document.body.classList.toggle('favorites-mode', enabled);
+  document.getElementById('favoritesToolbar').style.display = enabled ? '' : 'none';
+  document.getElementById('favoritesButton').classList.toggle('active', enabled);
+  updateFavoritesCount();
+  if (render) {
+    renderPapers();
+    window.scrollTo({ top: 0 });
+  }
+}
+
+function exportFavorites() {
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    papers: getFavoriteList()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `arxiv-favorites-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importFavorites(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    const papers = Array.isArray(data) ? data : data && data.papers;
+    if (!Array.isArray(papers)) {
+      throw new Error('expected an exported favorites JSON file');
+    }
+    const favorites = getFavorites();
+    let added = 0;
+    papers.forEach(paper => {
+      const key = paper && paper.title ? getPaperKey(paper) : null;
+      if (!key || favorites[key]) return;
+      favorites[key] = { ...paper, favoritedAt: paper.favoritedAt || new Date().toISOString() };
+      added += 1;
+    });
+    if (added > 0 && !saveFavorites()) return;
+    updateFavoritesCount();
+    if (favoritesMode) renderPapers();
+    alert(`Imported ${added} new favorites (${papers.length - added} skipped as duplicates or invalid).`);
+  } catch (error) {
+    alert(`Import failed: ${error.message}`);
+  }
+}
+
+function initFavorites() {
+  updateFavoritesCount();
+  document.getElementById('favoritesButton').addEventListener('click', () => setFavoritesMode(!favoritesMode));
+  document.getElementById('exitFavoritesButton').addEventListener('click', () => setFavoritesMode(false));
+  document.getElementById('exportFavoritesButton').addEventListener('click', exportFavorites);
+
+  const importInput = document.getElementById('importFavoritesInput');
+  document.getElementById('importFavoritesButton').addEventListener('click', () => importInput.click());
+  importInput.addEventListener('change', async () => {
+    if (importInput.files[0]) await importFavorites(importInput.files[0]);
+    importInput.value = '';
+  });
+
+  document.getElementById('modalFavoriteButton').addEventListener('click', () => {
+    if (currentModalPaper) toggleFavorite(currentModalPaper);
+  });
+
+  // 其他标签页修改收藏后同步
+  window.addEventListener('storage', event => {
+    if (event.key !== FAVORITES_STORAGE_KEY) return;
+    favoriteStore = null;
+    updateFavoritesCount();
+    document.querySelectorAll('[data-paper-key]').forEach(button => updateFavoriteButtons(button.dataset.paperKey));
   });
 }
 
@@ -1788,6 +1958,9 @@ function showPaperDetails(paper, paperIndex) {
   // Update modal content
   document.getElementById('modalBody').innerHTML = modalContent;
   loadFullTeaser(paper);
+  currentModalPaper = paper;
+  document.getElementById('modalFavoriteButton').dataset.paperKey = getPaperKey(paper);
+  updateFavoriteButtons(getPaperKey(paper));
   document.getElementById('paperLink').href = paper.url;
   document.getElementById('pdfLink').href = paper.url.replace('abs', 'pdf');
   document.getElementById('htmlLink').href = paper.url.replace('abs', 'html');
@@ -1930,6 +2103,7 @@ async function loadPapersByDateRange(startDate, endDate) {
     return;
   }
   
+  if (favoritesMode) setFavoritesMode(false, { render: false });
   currentDate = `${startDate} to ${endDate}`;
   document.getElementById('currentDate').textContent = `${formatDate(startDate)} - ${formatDate(endDate)}`;
   

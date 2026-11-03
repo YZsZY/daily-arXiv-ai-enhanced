@@ -799,6 +799,139 @@ main {
   flex: 1;
 }
 
+/* 收藏按钮 */
+.favorite-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 6;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.92);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+}
+
+.favorite-button:hover {
+  color: #f5b301;
+  transform: scale(1.08);
+}
+
+.favorite-button.active,
+.favorite-toggle.active {
+  color: #f5b301;
+}
+
+.favorite-button.active svg,
+.favorite-toggle.active svg,
+.favorites-entry.active svg {
+  fill: currentColor;
+}
+
+/* 没有 teaser 时按钮压在标题区，给标题留出空间 */
+.paper-card > .favorite-button + .paper-card-header {
+  padding-right: 60px;
+}
+
+.list-view .favorite-button {
+  top: 12px;
+  right: 12px;
+}
+
+.list-view.paper-container .paper-card {
+  padding-right: 60px;
+}
+
+.list-view .paper-card > .favorite-button + .paper-card-header {
+  padding-right: 0;
+}
+
+.favorites-entry {
+  position: relative;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.favorites-entry.active {
+  color: #f5b301;
+}
+
+.favorites-count {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--gradient-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.favorites-count:empty {
+  display: none;
+}
+
+.favorites-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 16px 20px;
+  background-color: var(--card-bg-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.favorites-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.favorites-title h2 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.favorites-total {
+  padding: 0 8px;
+  border-radius: 10px;
+  background-color: var(--background-hover);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.favorites-hint {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.favorites-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.favorites-mode .category-label-container,
+.favorites-mode .interest-label-container {
+  display: none;
+}
+
 /* 论文详情中的 teaser 大图 */
 .paper-teaser {
   display: block;
