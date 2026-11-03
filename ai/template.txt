@@ -1,4 +1,10 @@
-Please analyze the following abstract of papers. 
+User research interests:
+{interests}
 
-Content:
+Paper title: {title}
+Paper categories: {categories}
+Paper abstract:
 {content}
+
+First decide whether this paper should be kept according to the user's research interests. Keep the paper only when it is clearly related to at least one interest, including close subtopics, standard synonyms, or direct applications; reject papers that are only loosely related.
+If the paper is kept, analyze the abstract and fill in tldr, motivation, method, result and conclusion. If the paper is rejected, leave those fields empty.
