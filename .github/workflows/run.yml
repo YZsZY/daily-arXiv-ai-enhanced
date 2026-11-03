@@ -127,6 +127,16 @@ jobs:
 
           echo "AI 增强处理完成"
 
+      - name: Fetch teaser thumbnails
+        if: steps.precheck.outputs.skip_today != 'true' && steps.dedup_check.outputs.has_new_content == 'true'
+        continue-on-error: true
+        env:
+          LANGUAGE: ${{ vars.LANGUAGE }}
+        run: |
+          source .venv/bin/activate
+          today="${{ steps.precheck.outputs.today }}"
+          python daily_arxiv/teaser.py --data "data/${today}_AI_enhanced_${LANGUAGE}.jsonl"
+
       - name: Convert to Markdown
         if: steps.precheck.outputs.skip_today != 'true' && steps.dedup_check.outputs.has_new_content == 'true'
         env:

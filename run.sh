@@ -115,6 +115,9 @@ if [ "$PARTIAL_MODE" = "false" ]; then
     fi
     echo "✅ AI增强处理完成 / AI enhancement processing completed"
     cd ..
+
+    echo "步骤3.5：抓取 teaser 缩略图... / Step 3.5: Fetching teaser thumbnails..."
+    python daily_arxiv/teaser.py --data data/${today}_AI_enhanced_${LANGUAGE}.jsonl || echo "⚠️ teaser 抓取失败，继续 / Teaser fetching failed, continuing"
 else
     echo "⏭️  跳过AI处理（部分模式）/ Skipping AI processing (partial mode)"
 fi

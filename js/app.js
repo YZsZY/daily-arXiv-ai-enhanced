@@ -1223,7 +1223,9 @@ function parseJsonlData(jsonlText, date) {
         method: paper.AI && paper.AI.method ? paper.AI.method : '',
         result: paper.AI && paper.AI.result ? paper.AI.result : '',
         conclusion: paper.AI && paper.AI.conclusion ? paper.AI.conclusion : '',
-        interestFilter: paper.interest_filter || null
+        interestFilter: paper.interest_filter || null,
+        teaser: paper.teaser || '',
+        teaserSrc: paper.teaser_src || ''
       });
     } catch (error) {
       console.error('解析JSON行失败:', error, line);
@@ -1611,6 +1613,10 @@ function renderPapers() {
     paperCard.innerHTML = `
       <div class="paper-card-index">${index + 1}</div>
       ${paper.isMatched ? '<div class="match-badge" title="匹配您的搜索条件"></div>' : ''}
+      ${paper.teaser ? `
+      <div class="paper-card-teaser">
+        <img src="${escapeHtml(paper.teaser)}" alt="" loading="lazy" decoding="async" onerror="this.parentElement.remove()">
+      </div>` : ''}
       <div class="paper-card-header">
         <h3 class="paper-card-title">${highlightedTitle}</h3>
         <p class="paper-card-authors">${highlightedAuthors}</p>
@@ -1634,6 +1640,19 @@ function renderPapers() {
     
     container.appendChild(paperCard);
   });
+}
+
+// 详情弹窗先显示本地缩略图，arXiv 原图加载完成后再替换，避免大图阻塞显示
+function loadFullTeaser(paper) {
+  if (!paper.teaser || !paper.teaserSrc) return;
+  const fullImage = new Image();
+  fullImage.onload = () => {
+    const teaserImage = document.getElementById('paperTeaserImage');
+    if (teaserImage && teaserImage.getAttribute('src') === paper.teaser) {
+      teaserImage.src = paper.teaserSrc;
+    }
+  };
+  fullImage.src = paper.teaserSrc;
 }
 
 function showPaperDetails(paper, paperIndex) {
@@ -1712,8 +1731,12 @@ function showPaperDetails(paper, paperIndex) {
       <p><strong>Authors: </strong>${highlightedAuthors}</p>
       <p><strong>Categories: </strong>${categoryDisplay}</p>
       <p><strong>Date: </strong>${formatDate(paper.date)}</p>
-      
-      
+
+      ${paper.teaser ? `
+      <a class="paper-teaser" href="${escapeHtml(paper.teaserSrc || paper.teaser)}" target="_blank" rel="noopener">
+        <img id="paperTeaserImage" src="${escapeHtml(paper.teaser)}" alt="Teaser">
+      </a>` : ''}
+
       <h3>TL;DR</h3>
       <p>${highlightedSummary}</p>
       
@@ -1764,6 +1787,7 @@ function showPaperDetails(paper, paperIndex) {
   
   // Update modal content
   document.getElementById('modalBody').innerHTML = modalContent;
+  loadFullTeaser(paper);
   document.getElementById('paperLink').href = paper.url;
   document.getElementById('pdfLink').href = paper.url.replace('abs', 'pdf');
   document.getElementById('htmlLink').href = paper.url.replace('abs', 'html');
