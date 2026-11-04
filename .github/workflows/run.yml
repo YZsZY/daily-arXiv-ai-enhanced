@@ -2,7 +2,8 @@ name: arXiv-daily-ai-enhanced
 
 on:
   schedule:
-    - cron: "45 0 * * *"
+    # arXiv 在美东时间 20:00 公告（夏令时 UTC 00:00，冬令时 UTC 01:00），需晚于两者
+    - cron: "45 1 * * *"
   workflow_dispatch:
 
 jobs:
